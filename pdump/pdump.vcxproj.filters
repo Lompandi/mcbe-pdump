@@ -18,7 +18,7 @@
     <ClCompile Include="pdump.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="pdump\debugger.cpp">
+    <ClCompile Include="pdump\debug\debugger.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="pdump\mc_packets\mc_packetid.cpp">
@@ -36,9 +36,21 @@
     <ClCompile Include="pdump\pdump_core.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="pdump\utils\scanner\scanner.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pdump\debug\breakpoint.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pdump\cli\cmd_options.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pdump\utils\enum_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pdump\debugger.hpp">
+    <ClInclude Include="pdump\debug\debugger.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="pdump\mc_packets\mc_packetid.hpp">
@@ -54,6 +66,24 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="pdump\pdump.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pdump\utils\scanner\scanner.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pdump\utils\scanner\signature.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pdump\utils\scanner\string_literal.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pdump\debug\breakpoint.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pdump\cli\cmd_options.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pdump\utils\enum_util.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

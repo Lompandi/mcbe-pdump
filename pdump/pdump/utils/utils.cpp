@@ -109,4 +109,93 @@ namespace pdm {
 
         return ntHeaders;
     }
+
+    std::optional<PIMAGE_SECTION_HEADER>
+    get_section_hdr(const std::string& section_name, LPVOID lpBase, PIMAGE_NT_HEADERS& ntHeaders) {
+        PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpBase;
+        ntHeaders = (PIMAGE_NT_HEADERS)((DWORD_PTR)lpBase + dosHeader->e_lfanew);
+        PIMAGE_FILE_HEADER fileHeader = &ntHeaders->FileHeader;
+        PIMAGE_OPTIONAL_HEADER optionalHeader = &ntHeaders->OptionalHeader;
+
+        PIMAGE_SECTION_HEADER sectionHeader = IMAGE_FIRST_SECTION(ntHeaders);
+        for (int i = 0; i < fileHeader->NumberOfSections; i++) {
+            std::string csection_name((char*)sectionHeader[i].Name);
+            if (csection_name == section_name) {
+                return &sectionHeader[i];
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> 
+    get_runtime_functions_range(std::byte* base, PIMAGE_NT_HEADERS pNtHdr) {
+        uint32_t dFnRva;
+        dFnRva = pNtHdr->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION].VirtualAddress;
+        if (!dFnRva)
+            return {};
+
+        size_t entries_count = pNtHdr->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION].Size
+            / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY);
+        if (!entries_count)
+            return {};
+
+        PIMAGE_RUNTIME_FUNCTION_ENTRY pRtFn = (PIMAGE_RUNTIME_FUNCTION_ENTRY)
+            rva_to_foa(dFnRva, pNtHdr, (uintptr_t)base);
+
+        if (!pRtFn)
+            return {};
+
+        std::vector<std::pair<uint32_t, uint32_t>> func_list;
+        for (unsigned i = 0; i < entries_count; i++, pRtFn++) {
+            func_list.push_back(std::make_pair(pRtFn->BeginAddress, pRtFn->EndAddress));
+        }
+
+        return func_list;
+    }
+
+    PIMAGE_SECTION_HEADER get_enclose_section_hdr(DWORD rva,
+        PIMAGE_NT_HEADERS pNTHeader)
+    {
+        PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(pNTHeader);
+        unsigned i;
+
+        for (i = 0; i < pNTHeader->FileHeader.NumberOfSections; i++, section++)
+        {
+            if ((rva >= section->VirtualAddress) &&
+                (rva < (section->VirtualAddress + section->Misc.VirtualSize)))
+                return section;
+        }
+
+        return 0;
+    }
+
+    LPVOID rva_to_foa(DWORD rva, PIMAGE_NT_HEADERS pNTHeader, uintptr_t imageBase)
+    {
+        PIMAGE_SECTION_HEADER pSectionHdr;
+        INT delta;
+
+        pSectionHdr = get_enclose_section_hdr(rva, pNTHeader);
+        if (!pSectionHdr)
+            return 0;
+
+        delta = (INT)(pSectionHdr->VirtualAddress - pSectionHdr->PointerToRawData);
+        return (PVOID)(imageBase + rva - delta);
+    }
+
+    DWORD foa_to_rva(DWORD foa, const PIMAGE_NT_HEADERS ntHeaders, const uint8_t* peFileData) {
+        IMAGE_FILE_HEADER fileHeader = ntHeaders->FileHeader;
+        IMAGE_OPTIONAL_HEADER optionalHeader = ntHeaders->OptionalHeader;
+
+        DWORD sectionOffset = sizeof(IMAGE_NT_HEADERS) + fileHeader.SizeOfOptionalHeader;
+
+        for (int i = 0; i < fileHeader.NumberOfSections; ++i) {
+            IMAGE_SECTION_HEADER* sectionHeader = (IMAGE_SECTION_HEADER*)(peFileData + sectionOffset + i * sizeof(IMAGE_SECTION_HEADER));
+
+            if (foa >= sectionHeader->PointerToRawData && foa < (sectionHeader->PointerToRawData + sectionHeader->SizeOfRawData)) {
+                return (foa - sectionHeader->PointerToRawData + sectionHeader->VirtualAddress);
+            }
+        }
+        return 0;
+    }
 }

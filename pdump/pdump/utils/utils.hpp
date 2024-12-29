@@ -1,15 +1,20 @@
 #pragma once
 
 #include <windows.h>
-#include <optional>
-#include <print>
-#include <vector>
+#include <psapi.h>
 
-#include "hasher.hpp"
+#include <optional>
+#include <chrono>
+#include <vector>
 #include <iostream>
 #include <sstream>
+#include <print>
 #include <span>
 
+#include "hasher.hpp"
+#include "enum_util.hpp"
+#include "scanner/scanner.hpp"
+#include <source_location>
 
 namespace pdm {
     extern bool g_Verbose;
@@ -25,77 +30,57 @@ namespace pdm {
 
     bool str_to_bool(const std::string& str);
 
-    enum SearchDirection {
-        Up = 0,
-        Down,
+    std::optional<PIMAGE_SECTION_HEADER> get_section_hdr(const std::string& section_name, LPVOID lpBase, PIMAGE_NT_HEADERS& ntHeaders);
+    std::vector<std::pair<uint32_t, uint32_t>> get_runtime_functions_range(std::byte* base, PIMAGE_NT_HEADERS pNtHdr);
+
+    enum class log_level
+    {
+        Info = 0x0,
+        Warning,
+        Error,
+        Debug,
     };
 
-    inline std::optional<PIMAGE_SECTION_HEADER>
-    get_section_hdr(const std::string& section_name, LPVOID lpBase, PIMAGE_NT_HEADERS& ntHeaders) {
-        PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpBase;
-        ntHeaders = (PIMAGE_NT_HEADERS)((DWORD_PTR)lpBase + dosHeader->e_lfanew);
-        PIMAGE_FILE_HEADER fileHeader = &ntHeaders->FileHeader;
-        PIMAGE_OPTIONAL_HEADER optionalHeader = &ntHeaders->OptionalHeader;
-
-        PIMAGE_SECTION_HEADER sectionHeader = IMAGE_FIRST_SECTION(ntHeaders);
-        for (int i = 0; i < fileHeader->NumberOfSections; i++) {
-            std::string csection_name((char*)sectionHeader[i].Name);
-            if (csection_name == section_name) {
-                return &sectionHeader[i];
-            }
-        }
-
-        return std::nullopt;
+    constexpr std::string_view log_level_to_str(log_level log_lvl) {
+        if (log_lvl == log_level::Info)
+            return "INFO";
+        else if (log_lvl == log_level::Warning)
+            return "WARNING";
+        else if (log_lvl == log_level::Error)
+            return "ERROR";
+        else if (log_lvl == log_level::Debug)
+            return "DEBUG";
+        return {};
     }
 
-    inline void read_pdata_functions(LPVOID lpBase, PIMAGE_SECTION_HEADER pdataSection, std::vector<RUNTIME_FUNCTION*>& functions) {
-        LPVOID pdataBase = (LPVOID)((DWORD_PTR)lpBase + pdataSection->VirtualAddress);
-        size_t pdataSize = pdataSection->SizeOfRawData;
-
-        size_t count = pdataSize / sizeof(RUNTIME_FUNCTION);
-        functions.reserve(count);
-
-        for (size_t i = 0; i < count; ++i) {
-            functions.push_back(reinterpret_cast<RUNTIME_FUNCTION*>(static_cast<uint8_t*>(pdataBase) + i * sizeof(RUNTIME_FUNCTION)));
-        }
+    template<typename... Args>
+    std::string process_fmt(std::string_view fmt_str, Args&&... args) {
+        return std::vformat(fmt_str, std::make_format_args(std::forward<Args>(args)...));
     }
 
+    template <typename ...Args>
+    void log(log_level const level, std::string_view const message, Args&&... args) {
+        auto as_local = [](std::chrono::system_clock::time_point const tp) {
+            return std::chrono::zoned_time{ std::chrono::current_zone(), tp };
+        };
 
-    // WIP
-    std::optional<uint8_t> hex_to_byte(const std::string& hex) {
-        if (hex.size() != 2) return std::nullopt;
+        auto to_string = [](auto tp) {
+            return std::format("{:%F %T}", tp);
+        };
 
-        uint8_t byte;
-        std::istringstream(hex) >> std::hex >> byte;
-        return byte;
+        std::string fmt_str = process_fmt(message, std::forward<Args>(args)...);
+
+        std::cout <<
+            std::format("[{} {}] {}",
+                to_string(as_local(std::chrono::system_clock::now())).substr(0, 23),
+                log_level_to_str(level),
+                fmt_str)
+            << '\n';
     }
-
-    inline std::pair<std::span<uint8_t>, std::span<uint8_t>> make_signature(const std::string& signature) {
-        std::vector<uint8_t> bytes;
-        std::vector<uint8_t> masks;
-
-        std::istringstream signatureStream(signature);
-        std::string token;
-
-        while (signatureStream >> token) {
-            if (token == "??") {
-                bytes.push_back(0x00);
-                masks.push_back(0xFF);
-            }
-            else {
-                auto byteOpt = hex_to_byte(token);
-                if (byteOpt) {
-                    bytes.push_back(byteOpt.value());
-                    masks.push_back(0x00); 
-                }
-                else {
-                    std::cerr << "Invalid byte value in signature: " << token << std::endl;
-                }
-            }
-        }
-
-        return { std::span<uint8_t>(bytes), std::span<uint8_t>(masks) };
-    }
-
+    
     std::optional<PIMAGE_NT_HEADERS> get_nt_header_from_file(const std::string& filePath, std::vector<uint8_t>& fileData);
+    PIMAGE_SECTION_HEADER get_enclose_section_hdr(DWORD rva, PIMAGE_NT_HEADERS pNTHeader);
+
+    LPVOID rva_to_foa(DWORD rva, PIMAGE_NT_HEADERS pNTHeader, uintptr_t imageBase);
+    DWORD foa_to_rva(DWORD foa, const PIMAGE_NT_HEADERS ntHeaders, const uint8_t* peFileData);
 }

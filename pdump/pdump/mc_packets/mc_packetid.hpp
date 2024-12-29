@@ -223,4 +223,5 @@ enum class PacketId_t : uint32_t {
     SetHud = 0x134,
     AwardAchievementPacket = 0x135,
     EndId = 0x136,
+    AvailableCommandsPacket = 0x138,
 };

@@ -1,20 +1,16 @@
 
-#include <windows.h>
-#include <psapi.h>
-
-#include <print>
 #include <thread>
 #include <future>
-#include <optional>
 
-#include "network_events_callback.hpp"
-#include "utils/utils.hpp"
-#include "debugger.hpp"
 #include "pdump.hpp"
+#include "utils/utils.hpp"
+#include "debug/debugger.hpp"
+#include "network_events_callback.hpp"
+#include "mc_packets/mc_packetid.hpp"
 
 namespace pdm {
-
     std::string g_ExecutablePath;
+    std::string g_OutputDumpPath = "D:\\bedrock-server-1.21.51.02\\outputs";
 
     static uintptr_t GetBaseAddress(HANDLE hProcess) {
         HMODULE hModules[1024];
@@ -39,7 +35,7 @@ namespace pdm {
             NULL,
             NULL,
             FALSE,
-            CREATE_SUSPENDED | CREATE_NEW_CONSOLE,
+            CREATE_SUSPENDED | CREATE_NO_WINDOW,
             NULL,
             NULL,
             &si,
@@ -65,42 +61,43 @@ namespace pdm {
         }
 
         g_Debugger.monitor(hproc);
-
         return;
     }
 
     void start() {
-        //init global options
         g_DumpPktContent = str_to_bool(g_CmdOpts.get_flag_val("--dump"));
         g_DumpPktByteMax = std::stoull(g_CmdOpts.get_flag_val("--dump-max"));
         g_DumpDecoded    = str_to_bool(g_CmdOpts.get_flag_val("--dump-decode"));
 
         g_Verbose = str_to_bool(g_CmdOpts.get_flag_val("--verbose"));
+        g_OutputDumpPath = g_CmdOpts.get_flag_val("--output");
+
 
         std::print("Version - WIP\n");
         std::print("created by ConsoleBreak\n\n");
 
-        std::print("[INFO] Launching bds instance...\n");
+        log(log_level::Info, "Launching bds instance...");
+
         std::future<void> proc_future = std::async(std::launch::async, create_proc);
 
         while (hproc == NULL) {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
 
-        std::print("[INFO] Debugger started.\n");
-        uintptr_t mod_base = 0x0;
-        while (mod_base == 0x0) {
-            mod_base = GetBaseAddress(hproc);
-            std::print("[INFO] Base address: {:#x}", mod_base);
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
+        log(log_level::Info, "Debugger started.");
+
+        uintptr_t mod_base = GetBaseAddress(hproc);
+        log(log_level::Debug, "Base address: {:#x}", mod_base);
 
         init_statistic();
 
-        // signature for the func: 41 C1 ?? 0C 41 80 ?? 03
-        // in the function, search for whole func
+        g_Debugger.insert_breakpoint_tmp(mod_base + 0xD4B2D0, [](CONTEXT* ctx, HANDLE hproc) {
+            log(log_level::Info, "Server started.");
+        });
 
+        g_Debugger.insert_breakpoint(mod_base + 0xD72D20, start_encryption_callback);
         g_Debugger.insert_breakpoint(mod_base + 0xD41CF8, receive_callback);
+
         g_Debugger.monitor(hproc);
     }
 

@@ -16,4 +16,5 @@ inline void init_statistic() {
 	}
 }
 
+void start_encryption_callback(CONTEXT* ctx, HANDLE hproc);
 void receive_callback(CONTEXT* ctx, HANDLE hproc);

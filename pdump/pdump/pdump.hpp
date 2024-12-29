@@ -1,13 +1,9 @@
 #pragma once
 
 #include <string>
-
 #include <unordered_map>
 
 namespace pdm {
-
-    extern std::string g_ExecutablePath;
-
     class CmdOptions_t {
     public:
         void add_option(const std::string& flag, const std::string& defaultValue) {
@@ -43,6 +39,7 @@ namespace pdm {
     };
 
     void start();
-
     extern CmdOptions_t g_CmdOpts;
+    extern std::string g_ExecutablePath;
+    extern std::string g_OutputDumpPath;
 }
